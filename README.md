@@ -100,6 +100,11 @@ streamlit
 
 ---
 
+## Week 1 Output
+[View full notebook output (PDF)](results/week1_output.pdf)
+
+---
+
 ## 📬 About
 
 Built by me as a self-learning project to break into AI/ML engineering.
