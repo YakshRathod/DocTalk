@@ -101,7 +101,7 @@ streamlit
 ---
 
 ## Week 1 Output
-[View full notebook output (PDF)](Results/week1_output.pdf)
+[View full notebook output (PDF)](Results/Week1_Output.pdf)
 
 ---
 
