@@ -53,7 +53,7 @@ doctalk/
 ## 📅 Build Log
 
 - [x] **Week 1** — PDF loading, chunking, HuggingFace embeddings, FAISS index
-- [ ] **Week 2** — Groq LLM integration, prompt engineering, answer generation
+- [x] **Week 2** — Groq LLM integration, prompt engineering, answer generation
 - [ ] **Week 3** — Multi-file support, source citation, edge case handling
 - [ ] **Week 4** — Streamlit UI, deployment on Streamlit Cloud
 
