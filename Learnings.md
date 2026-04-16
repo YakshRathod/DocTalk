@@ -41,8 +41,8 @@ weakly related ones.
 Decided against hardcoded pattern filtering (DOI, JSTOR, S2CID) because it only works 
 for academic documents, not a general purpose app. Better solutions in order of 
 sophistication:
-1. Score threshold at query time (implemented in Week 1)
-2. Contextual chunk enrichment using LLM (planned for Week 2)
+1. Score threshold at query time (explored in Week 1, not implemented)
+2. Contextual chunk enrichment using LLM (explored, not implemented — scaling concerns)
 3. Cross-encoder reranker (planned for Week 5)
 
 ### Contextual Enrichment Tradeoff
