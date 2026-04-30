@@ -56,6 +56,8 @@ PDF, DOCX, TXT — with validation to catch empty or unreadable files before ind
 ---
 
 ## Project structure
+
+```
 doctalk/
 ├── notebooks/
 │   ├── Week1_Foundations.ipynb
@@ -69,7 +71,7 @@ doctalk/
 ├── requirements.txt
 └── README.md
 
----
+```
 
 ## Build log
 
