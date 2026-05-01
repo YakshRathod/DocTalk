@@ -114,3 +114,48 @@ Explored what LangChain's Runnables abstract away:
 The full RAG chain without LangChain is 5 lines of plain Python. LangChain's declarative 
 syntax is cleaner to read but hides what's happening. Plan to rewrite without LangChain 
 in Week 5.
+
+---
+
+## Week 3 — Refinements
+
+### Per-Document FAISS Index Structure
+Moved from a single shared FAISS index to per-document indexes stored under 
+faiss_index/standalone/. Each document gets its own folder named after the file. 
+This prevents new uploads from overwriting existing indexes and makes multi-document 
+querying possible without rebuilding everything from scratch.
+
+### FAISS merge_from
+FAISS has a built-in merge_from method that combines two vector stores into one in a 
+single line. This is what powers the multi-document querying feature — individual 
+indexes are loaded and merged at query time rather than stored as a combined index. 
+Most people don't know this exists and would rebuild the index from scratch instead.
+
+### Multi File Type Support
+Added support for DOCX and TXT alongside PDF. Each file type needs a different 
+LangChain loader — PyMuPDFLoader for PDF, Docx2txtLoader for DOCX, TextLoader for TXT. 
+The rest of the pipeline (chunking, embedding, indexing) is identical regardless of 
+file type.
+
+### Duplicate Index Detection
+Added a check before indexing to detect if a document has already been indexed. 
+If it has, the user is prompted to either reindex or skip. This prevents accidental 
+overwrites and saves time on large documents.
+
+### Edge Case Handling
+Added validation in the document loader to catch two common failure modes — empty 
+documents and documents with too little text to be useful (less than 100 characters). 
+Both raise a ValueError with a clear message rather than failing silently downstream 
+during embedding.
+
+### Delete Index Function
+Added a delete function that removes a document's FAISS index folder from Drive. 
+Includes a confirmation prompt before deletion to prevent accidents. Kept the function 
+call uncommented in the notebook since it can't be uncommented from the Streamlit UI — 
+the user simply doesn't run the cell unless they want to delete something.
+
+### Multi-Document Querying
+Users can select multiple indexes to query across simultaneously. The selected indexes 
+are merged using FAISS merge_from and a single RAG chain runs against the merged store. 
+Source citations show which file each chunk came from, making it clear when an answer 
+spans multiple documents.
