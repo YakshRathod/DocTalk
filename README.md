@@ -63,7 +63,7 @@ doctalk/
 │   ├── Week1_Foundations.ipynb
 │   ├── Week2_LLM_Integration.ipynb
 │   └── Week3_Refinements.ipynb
-├── results/
+├── Results/
 │   ├── week1_output.pdf
 │   ├── week2_output.pdf
 │   └── week3_output.pdf
