@@ -119,43 +119,19 @@ in Week 5.
 
 ## Week 3 — Refinements
 
-### Per-Document FAISS Index Structure
-Moved from a single shared FAISS index to per-document indexes stored under 
-faiss_index/standalone/. Each document gets its own folder named after the file. 
-This prevents new uploads from overwriting existing indexes and makes multi-document 
-querying possible without rebuilding everything from scratch.
+### Streamlit Reruns Everything
+Streamlit reruns the entire `app.py` on every user interaction — button click, dropdown change, anything. This caused the duplicate index warning to appear repeatedly even when the user wasn't uploading anything. The fix was gating all indexing logic behind an explicit Index Documents button so nothing runs unless the user deliberately triggers it. Lesson: anything that shouldn't repeat on every interaction needs to be tied to an explicit user action, not evaluated freely in the script.
 
-### FAISS merge_from
-FAISS has a built-in merge_from method that combines two vector stores into one in a 
-single line. This is what powers the multi-document querying feature — individual 
-indexes are loaded and merged at query time rather than stored as a combined index. 
-Most people don't know this exists and would rebuild the index from scratch instead.
+### pdfplumber Only Reads Real Tables
+Table extraction works only if the source document contains an actual structured table — rows, columns, cells. If content is visually formatted to look like a table using two-column text layout (common in NASA fact sheets and marketing PDFs), pdfplumber won't detect it. The underlying text is still extracted correctly by PyMuPDF, so no data is lost — but the table-specific extraction adds no value for these documents.
 
-### Multi File Type Support
-Added support for DOCX and TXT alongside PDF. Each file type needs a different 
-LangChain loader — PyMuPDFLoader for PDF, Docx2txtLoader for DOCX, TextLoader for TXT. 
-The rest of the pipeline (chunking, embedding, indexing) is identical regardless of 
-file type.
+### RAG Struggles with Comparative Table Queries
+RAG handles direct fact lookup from tables well — "what is the orbital velocity of Neptune" retrieves the right row and answers correctly. But comparative reasoning across multiple rows fails — "which planet has the longest orbital period" requires the LLM to see all 8 rows simultaneously, which chunking and top-k retrieval prevent. Keeping tables as single unchunked documents helps, but the retriever still only returns top k results so the full table may not always be included.
 
-### Duplicate Index Detection
-Added a check before indexing to detect if a document has already been indexed. 
-If it has, the user is prompted to either reindex or skip. This prevents accidental 
-overwrites and saves time on large documents.
+### Per-Document Indexing Prevents Overwrites
+Moving from a single shared FAISS index to per-document indexes means new uploads never overwrite existing ones. Each document gets its own folder. FAISS's built-in `merge_from` method combines selected indexes at query time in a single line — making multi-document querying trivial without rebuilding anything.
 
-### Edge Case Handling
-Added validation in the document loader to catch two common failure modes — empty 
-documents and documents with too little text to be useful (less than 100 characters). 
-Both raise a ValueError with a clear message rather than failing silently downstream 
-during embedding.
+### Table Chunks Must Not Be Split
+When table data was passed through the standard `RecursiveCharacterTextSplitter`, rows were cut mid-way — a row containing temperature, moons, and rings would get split across two chunks, losing the relationship between the header and the value. This caused the LLM to return "I could not find an answer" even when the data was technically in the index.
 
-### Delete Index Function
-Added a delete function that removes a document's FAISS index folder from Drive. 
-Includes a confirmation prompt before deletion to prevent accidents. Kept the function 
-call uncommented in the notebook since it can't be uncommented from the Streamlit UI — 
-the user simply doesn't run the cell unless they want to delete something.
-
-### Multi-Document Querying
-Users can select multiple indexes to query across simultaneously. The selected indexes 
-are merged using FAISS merge_from and a single RAG chain runs against the merged store. 
-Source citations show which file each chunk came from, making it clear when an answer 
-spans multiple documents.
+Fixed by separating text documents and table documents before chunking — text docs go through the splitter normally, table docs are added to the index as-is without splitting. Each table is one chunk, keeping all rows and their headers together.
