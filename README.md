@@ -58,7 +58,6 @@ PDF, DOCX, TXT — with validation to catch empty or unreadable files before ind
 ---
 
 ## Project structure
-## Project structure
 
 ```
 doctalk/
