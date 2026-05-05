@@ -19,7 +19,8 @@ into a vector, finds the closest matching chunks, and passes them to Llama 3
 
 Each document gets its own FAISS index so multiple documents can be stored and 
 queried independently. You can also merge indexes to query across multiple documents 
-at once.
+at once. Tables in PDFs are extracted separately and kept as whole chunks so table 
+data is never split mid-row.
 
 ---
 
@@ -42,7 +43,8 @@ specific document rather than relying on its training data alone.
 | Vector Store | FAISS |
 | LLM | Groq API — Llama 3.3 70b (free tier) |
 | Orchestration | LangChain |
-| UI | Streamlit (coming in Week 4) |
+| Table Extraction | pdfplumber |
+| UI | Streamlit |
 | Notebooks | Google Colab |
 
 Total API cost: $0 — all free tools.
@@ -57,29 +59,31 @@ PDF, DOCX, TXT — with validation to catch empty or unreadable files before ind
 
 ## Project structure
 
-```
 doctalk/
 ├── notebooks/
 │   ├── Week1_Foundations.ipynb
 │   ├── Week2_LLM_Integration.ipynb
-│   └── Week3_Refinements.ipynb
+│   ├── Week3_Refinements.ipynb
+│   └── Week4_Table_Extraction.ipynb
+├── app/
+│   └── app.py
 ├── Results/
 │   ├── week1_output.pdf
 │   ├── week2_output.pdf
-│   └── week3_output.pdf
+│   ├── week3_output.pdf
+│   └── week4_table_extraction_output.pdf
 ├── LEARNINGS.md
 ├── requirements.txt
 └── README.md
-
-```
 
 ## Build log
 
 - [x] Week 1 — PDF loading, chunking, HuggingFace embeddings, FAISS index
 - [x] Week 2 — Groq LLM integration, prompt engineering, answer grounding
 - [x] Week 3 — Multi file type support, per-document indexing, multi-doc querying, edge cases
-- [ ] Week 4 — Folder indexing, table extraction, Streamlit UI
-- [ ] Week 5 — Reranker, raw pipeline rewrite, embedding experiments
+- [x] Week 4 — Table extraction, Streamlit UI with single and multi-doc querying
+- [ ] Week 5 — Folder indexing, cross-encoder reranker
+- [ ] Week 6 — Pipeline rewrite without LangChain, embedding experiments
 
 ---
 
@@ -98,10 +102,23 @@ outperformed the complex one. Fix the data first, add complexity later.
 FAISS has a built-in merge_from method that makes combining multiple indexes 
 trivial — one line to merge any number of indexes for cross-document querying.
 
+Table rows must never be split mid-chunk. Keeping tables as single intact chunks 
+was the difference between the LLM finding the answer and returning nothing.
+
 ---
 
 ## Run it yourself
 
+**Streamlit app:**
+```bash
+git clone https://github.com/YakshRathod/DocTalk.git
+cd DocTalk
+pip install -r requirements.txt
+streamlit run app/app.py
+```
+You'll need a free API key from [console.groq.com](https://console.groq.com).
+
+**Notebooks:**
 Open any notebook in the `notebooks/` folder directly in Google Colab — no local 
 setup needed. You'll need a free API key from [console.groq.com](https://console.groq.com).
 
