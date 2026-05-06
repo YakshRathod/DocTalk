@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import shutil
+import json
 import pdfplumber
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
@@ -125,6 +126,18 @@ h2, h3 {
     margin: 0.3rem 0;
 }
 
+.folder-item {
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-left: 3px solid #6ee7b7;
+    border-radius: 4px;
+    padding: 0.5rem 0.8rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: #888;
+    margin: 0.3rem 0;
+}
+
 .stButton > button {
     background: #1a1a1a;
     color: #e0e0e0;
@@ -200,8 +213,10 @@ hr {
 # ── Constants ──────────────────────────────────────────────────────────────────
 DOCS_DIR = "uploaded_docs"
 STANDALONE_DIR = "faiss_index/standalone"
+FOLDERS_DIR = "faiss_index/folders"
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(STANDALONE_DIR, exist_ok=True)
+os.makedirs(FOLDERS_DIR, exist_ok=True)
 
 # ── Session state ──────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
@@ -210,6 +225,8 @@ if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 if "selected_indexes" not in st.session_state:
     st.session_state.selected_indexes = []
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
 
 # ── Model loading ──────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -318,6 +335,53 @@ def list_indexes():
         if os.path.isdir(os.path.join(STANDALONE_DIR, name))
     ]
 
+def list_folders():
+    if not os.path.exists(FOLDERS_DIR):
+        return []
+    return [
+        name for name in os.listdir(FOLDERS_DIR)
+        if os.path.isdir(os.path.join(FOLDERS_DIR, name))
+    ]
+
+def get_folder_metadata(folder_name):
+    metadata_path = os.path.join(FOLDERS_DIR, folder_name, "metadata.json")
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r") as f:
+            return json.load(f)
+    return {"documents": []}
+
+def save_folder_metadata(folder_name, metadata):
+    metadata_path = os.path.join(FOLDERS_DIR, folder_name, "metadata.json")
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f)
+
+def add_to_folder(folder_name, doc_name, chunks, embeddings):
+    folder_path = os.path.join(FOLDERS_DIR, folder_name)
+    os.makedirs(folder_path, exist_ok=True)
+
+    # Build standalone index for the doc
+    standalone_path = os.path.join(STANDALONE_DIR, doc_name)
+    new_vs = build_index(chunks, standalone_path, embeddings)
+
+    # Merge into folder index
+    index_path = os.path.join(folder_path, "index")
+    if os.path.exists(index_path):
+        folder_vs = FAISS.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+        folder_vs.merge_from(new_vs)
+        folder_vs.save_local(index_path)
+    else:
+        new_vs.save_local(index_path)
+
+    # Update metadata
+    metadata = get_folder_metadata(folder_name)
+    if doc_name not in metadata["documents"]:
+        metadata["documents"].append(doc_name)
+    save_folder_metadata(folder_name, metadata)
+
 def load_vectorstore(selected, embeddings):
     if not selected:
         return None
@@ -334,6 +398,16 @@ def load_vectorstore(selected, embeddings):
         )
         vs.merge_from(other)
     return vs
+
+def load_folder_vectorstore(folder_name, embeddings):
+    index_path = os.path.join(FOLDERS_DIR, folder_name, "index")
+    if not os.path.exists(index_path):
+        return None
+    return FAISS.load_local(
+        index_path,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
 
 def build_rag_chain(vectorstore, llm):
     template = """
@@ -373,8 +447,21 @@ with st.sidebar:
 
     # Upload
     st.markdown("**Upload Documents**")
-    if "uploader_key" not in st.session_state:
-        st.session_state["uploader_key"] = 0
+
+    upload_mode = st.radio(
+        "Upload as",
+        ["Standalone", "Into a folder"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    if upload_mode == "Into a folder":
+        folders = list_folders()
+        if folders:
+            selected_folder = st.selectbox("Select folder", folders, label_visibility="collapsed")
+        else:
+            st.info("No folders yet. Create one below.")
+            selected_folder = None
 
     uploaded_files = st.file_uploader(
         "PDF, DOCX, or TXT",
@@ -425,8 +512,14 @@ with st.sidebar:
                             f.write(uploaded_file.getbuffer())
                         docs = load_document(filepath)
                         chunks = chunk_documents(docs)
-                        build_index(chunks, index_path, embeddings)
-                        st.success(f"Indexed: {doc_name} ({len(chunks)} chunks)")
+
+                        if upload_mode == "Into a folder" and selected_folder:
+                            add_to_folder(selected_folder, doc_name, chunks, embeddings)
+                            st.success(f"Added to folder '{selected_folder}': {doc_name}")
+                        else:
+                            build_index(chunks, index_path, embeddings)
+                            st.success(f"Indexed: {doc_name} ({len(chunks)} chunks)")
+
                     except ValueError as e:
                         st.error(str(e))
 
@@ -436,50 +529,107 @@ with st.sidebar:
                 st.session_state.pop(f"force_{doc_name}", None)
             st.session_state["uploader_key"] += 1
             st.rerun()
+
     st.markdown("---")
 
-    # Available indexes
+    # Folder management
+    st.markdown("**Folder Management**")
+    new_folder_name = st.text_input("Create new folder", placeholder="e.g. Space, History...")
+    if st.button("Create Folder", key="create_folder_btn"):
+        if new_folder_name.strip():
+            folder_path = os.path.join(FOLDERS_DIR, new_folder_name.strip())
+            if os.path.exists(folder_path):
+                st.warning(f"Folder '{new_folder_name}' already exists.")
+            else:
+                os.makedirs(folder_path, exist_ok=True)
+                save_folder_metadata(new_folder_name.strip(), {"documents": []})
+                st.success(f"Created folder: {new_folder_name}")
+                st.rerun()
+        else:
+            st.error("Please enter a folder name.")
+
+    folders = list_folders()
+    if folders:
+        st.markdown("**Available Folders**")
+        for folder in folders:
+            metadata = get_folder_metadata(folder)
+            doc_count = len(metadata["documents"])
+            st.markdown(
+                f'<div class="folder-item">📁 {folder} — {doc_count} doc(s)</div>',
+                unsafe_allow_html=True
+            )
+
+    st.markdown("---")
+
+    # Available standalone documents
     indexes = list_indexes()
     if indexes:
         st.markdown("**Available Documents**")
         for idx in indexes:
             st.markdown(f'<div class="doc-item">📄 {idx}</div>', unsafe_allow_html=True)
 
-        st.markdown("---")
+    st.markdown("---")
 
-        # Delete
-        st.markdown("**Delete Index**")
-        to_delete = st.selectbox("Select to delete", [""] + indexes, label_visibility="collapsed")
-        if to_delete and st.button("Delete", key="delete_btn"):
+    # Delete
+    st.markdown("**Delete**")
+    delete_type = st.radio("Delete type", ["Document", "Folder"], horizontal=True, label_visibility="collapsed")
+
+    if delete_type == "Document":
+        to_delete = st.selectbox("Select document to delete", [""] + list_indexes(), label_visibility="collapsed")
+        if to_delete and st.button("Delete Document", key="delete_doc_btn"):
             shutil.rmtree(os.path.join(STANDALONE_DIR, to_delete))
             st.success(f"Deleted: {to_delete}")
             st.cache_resource.clear()
             st.rerun()
+    else:
+        to_delete_folder = st.selectbox("Select folder to delete", [""] + list_folders(), label_visibility="collapsed")
+        if to_delete_folder and st.button("Delete Folder", key="delete_folder_btn"):
+            shutil.rmtree(os.path.join(FOLDERS_DIR, to_delete_folder))
+            st.success(f"Deleted folder: {to_delete_folder}")
+            st.cache_resource.clear()
+            st.rerun()
+
 # ── Main area ──────────────────────────────────────────────────────────────────
 st.markdown('<h1>DocTalk</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">ask questions — get answers from your documents</p>', unsafe_allow_html=True)
 
 indexes = list_indexes()
+folders = list_folders()
 
 if not groq_key:
     st.info("Add your Groq API key in the sidebar to get started.")
-elif not indexes:
+elif not indexes and not folders:
     st.info("Upload a document in the sidebar to get started.")
 else:
     embeddings = load_embeddings()
     llm = load_llm(groq_key)
 
-    # Query mode
-    mode = st.radio("Query mode", ["Single document", "Multiple documents"], horizontal=True)
+    mode = st.radio("Query mode", ["Single document", "Multiple documents", "Folder"], horizontal=True)
     st.markdown("")
 
     if mode == "Single document":
-        selected = st.selectbox("Select document", indexes)
-        selected_indexes = [selected] if selected else []
-    else:
-        selected_indexes = st.multiselect("Select documents to query across", indexes)
+        if indexes:
+            selected = st.selectbox("Select document", indexes)
+            selected_indexes = [selected] if selected else []
+        else:
+            st.warning("No standalone documents indexed yet.")
+            selected_indexes = []
 
-    if selected_indexes:
+    elif mode == "Multiple documents":
+        if indexes:
+            selected_indexes = st.multiselect("Select documents to query across", indexes)
+        else:
+            st.warning("No standalone documents indexed yet.")
+            selected_indexes = []
+
+    else:
+        if folders:
+            selected_folder_query = st.selectbox("Select folder to query", folders)
+        else:
+            st.warning("No folders created yet.")
+            selected_folder_query = None
+
+    if mode in ["Single document", "Multiple documents"] and selected_indexes:
         with st.spinner("Loading index..."):
             vs = load_vectorstore(selected_indexes, embeddings)
             chain, retriever = build_rag_chain(vs, llm)
@@ -512,7 +662,43 @@ else:
                     f'</div>',
                     unsafe_allow_html=True
                 )
-        elif question == "":
-            pass
+
+    elif mode == "Folder" and selected_folder_query:
+        with st.spinner("Loading folder index..."):
+            vs = load_folder_vectorstore(selected_folder_query, embeddings)
+
+        if vs is None:
+            st.warning("This folder has no documents indexed yet. Upload documents into it first.")
         else:
-            st.warning("Please enter a question.")
+            metadata = get_folder_metadata(selected_folder_query)
+            st.caption(f"Querying across {len(metadata['documents'])} document(s) in '{selected_folder_query}'")
+            chain, retriever = build_rag_chain(vs, llm)
+
+            st.markdown("---")
+
+            with st.form("folder_query_form"):
+                question = st.text_input("Ask a question", placeholder="What is...")
+                ask = st.form_submit_button("Ask")
+
+            if ask and question.strip():
+                with st.spinner("Thinking..."):
+                    answer = chain.invoke(question)
+                    source_docs = retriever.invoke(question)
+
+                st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
+
+                st.markdown("**Sources**")
+                for i, doc in enumerate(source_docs[:3]):
+                    source_file = os.path.basename(doc.metadata.get("source", "unknown"))
+                    page = doc.metadata.get("page", 0) + 1
+                    doc_type = doc.metadata.get("type", "text")
+                    tag_class = "tag table" if doc_type == "table" else "tag"
+                    preview = doc.page_content[:150].replace("\n", " ")
+                    st.markdown(
+                        f'<div class="source-item">'
+                        f'<span class="source-label">[{i+1}]</span> '
+                        f'<span class="{tag_class}">{doc_type}</span> '
+                        f'{source_file} · page {page}<br>{preview}...'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
