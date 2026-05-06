@@ -119,9 +119,6 @@ in Week 5.
 
 ## Week 3 — Refinements
 
-### Streamlit Reruns Everything
-Streamlit reruns the entire `app.py` on every user interaction — button click, dropdown change, anything. This caused the duplicate index warning to appear repeatedly even when the user wasn't uploading anything. The fix was gating all indexing logic behind an explicit Index Documents button so nothing runs unless the user deliberately triggers it. Lesson: anything that shouldn't repeat on every interaction needs to be tied to an explicit user action, not evaluated freely in the script.
-
 ### pdfplumber Only Reads Real Tables
 Table extraction works only if the source document contains an actual structured table — rows, columns, cells. If content is visually formatted to look like a table using two-column text layout (common in NASA fact sheets and marketing PDFs), pdfplumber won't detect it. The underlying text is still extracted correctly by PyMuPDF, so no data is lost — but the table-specific extraction adds no value for these documents.
 
@@ -135,3 +132,40 @@ Moving from a single shared FAISS index to per-document indexes means new upload
 When table data was passed through the standard `RecursiveCharacterTextSplitter`, rows were cut mid-way — a row containing temperature, moons, and rings would get split across two chunks, losing the relationship between the header and the value. This caused the LLM to return "I could not find an answer" even when the data was technically in the index.
 
 Fixed by separating text documents and table documents before chunking — text docs go through the splitter normally, table docs are added to the index as-is without splitting. Each table is one chunk, keeping all rows and their headers together.
+
+---
+
+## Week 4 — Table Extraction and Streamlit UI
+
+### Streamlit UI Logic Must Be Tied to Explicit Triggers
+Any logic that runs freely in the script executes on every rerun — every button click, 
+dropdown change, or interaction. This caused duplicate warnings and indexing logic to 
+fire repeatedly without user intent. Fixed by gating all stateful operations behind 
+explicit trigger buttons so nothing runs unless the user deliberately initiates it.
+
+### Cached Resources Persist After Deletion
+Deleting a FAISS index folder from disk didn't remove it from the app because Streamlit's 
+resource cache still held a reference to it. The deleted index kept appearing in the 
+available documents list. Fixed by calling `st.cache_resource.clear()` before rerunning 
+after deletion — forces Streamlit to drop all cached objects and reload from disk.
+
+### Streamlit Form Hints Can Be Hidden with CSS
+The "Press Enter to submit form" hint that appears inside Streamlit forms cannot be 
+removed through the API — it's hardcoded into the component. Hidden it using CSS by 
+targeting the `[data-testid="InputInstructions"]` element and setting `display: none`. 
+A small thing but important for a clean demo presentation.
+
+### File Uploader Needs a Dynamic Key to Reset
+After indexing, the file uploader retained the uploaded files across reruns — the files 
+stayed visible in the sidebar even after processing was complete. Streamlit doesn't 
+provide a direct reset method for the uploader. Fixed by assigning a dynamic key to the 
+uploader using a session state counter — `key=f"uploader_{st.session_state['uploader_key']}"` 
+— and incrementing the counter after each successful index. Streamlit treats a widget 
+with a new key as a brand new widget with fresh state, effectively clearing the uploaded 
+files.
+
+### Sidebar Indentation Is Critical in Streamlit
+All sidebar elements must be properly indented inside the `with st.sidebar:` block. A 
+single indentation error caused the file uploader to render in the main content area 
+instead of the sidebar, breaking the entire layout. Python's strict indentation rules 
+apply to Streamlit layout blocks just as they do to any other code.
