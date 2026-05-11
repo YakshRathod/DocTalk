@@ -409,6 +409,18 @@ def load_folder_vectorstore(folder_name, embeddings):
         allow_dangerous_deserialization=True
     )
 
+# ── Reranker ───────────────────────────────────────────────────────────────────
+@st.cache_resource
+def load_reranker():
+    from sentence_transformers import CrossEncoder
+    return CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
+def rerank(query, docs, reranker, top_k=5):
+    pairs = [[query, doc.page_content] for doc in docs]
+    scores = reranker.predict(pairs)
+    ranked = sorted(zip(scores, docs), key=lambda x: x[0], reverse=True)
+    return [doc for _, doc in ranked[:top_k]]
+
 def build_rag_chain(vectorstore, llm):
     template = """
 You are a helpful assistant that answers questions based strictly on the provided context.
@@ -431,12 +443,18 @@ Answer:
             for doc in docs
         ])
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    reranker = load_reranker()
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
+
+    def retrieve_and_rerank(query):
+        docs = retriever.invoke(query)
+        return rerank(query, docs, reranker, top_k=5)
+
     chain = (
-        {"context": RunnableLambda(lambda q: retriever.invoke(q)) | format_chunks, "question": RunnablePassthrough()}
+        {"context": RunnableLambda(retrieve_and_rerank) | format_chunks, "question": RunnablePassthrough()}
         | prompt | llm | StrOutputParser()
     )
-    return chain, retriever
+    return chain, retrieve_and_rerank
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -632,7 +650,7 @@ else:
     if mode in ["Single document", "Multiple documents"] and selected_indexes:
         with st.spinner("Loading index..."):
             vs = load_vectorstore(selected_indexes, embeddings)
-            chain, retriever = build_rag_chain(vs, llm)
+            chain, retrieve_and_rerank = build_rag_chain(vs, llm)
 
         st.markdown("---")
 
@@ -643,7 +661,7 @@ else:
         if ask and question.strip():
             with st.spinner("Thinking..."):
                 answer = chain.invoke(question)
-                source_docs = retriever.invoke(question)
+                source_docs = retrieve_and_rerank(question)
 
             st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
 
@@ -672,7 +690,7 @@ else:
         else:
             metadata = get_folder_metadata(selected_folder_query)
             st.caption(f"Querying across {len(metadata['documents'])} document(s) in '{selected_folder_query}'")
-            chain, retriever = build_rag_chain(vs, llm)
+            chain, retrieve_and_rerank = build_rag_chain(vs, llm)
 
             st.markdown("---")
 
@@ -683,7 +701,7 @@ else:
             if ask and question.strip():
                 with st.spinner("Thinking..."):
                     answer = chain.invoke(question)
-                    source_docs = retriever.invoke(question)
+                    source_docs = retrieve_and_rerank(question)
 
                 st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
 
