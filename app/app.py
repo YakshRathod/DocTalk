@@ -444,7 +444,7 @@ Answer:
         ])
 
     reranker = load_reranker()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 50})
 
     def retrieve_and_rerank(query):
         docs = retriever.invoke(query)
