@@ -176,7 +176,7 @@ apply to Streamlit layout blocks just as they do to any other code.
 When adding a new document to a folder, merging the new document's index into the existing folder index using FAISS merge_from is faster than rebuilding the entire folder from scratch. The tradeoff is that removing a document from a folder requires a full rebuild since FAISS doesn't support vector deletion. This is acceptable because additions are frequent and deletions are rare.
 
 ### Cross-Encoder Reranker Fixes Retrieval Failures
-Adding a cross-encoder reranker as a second stage after FAISS retrieval improved results on 2 out of 8 test queries without hurting any others. The reranker never made results worse — when FAISS was correct, the reranker agreed. When FAISS returned irrelevant chunks (moons of Mars, Neptune velocity), the reranker correctly promoted the relevant ones.
+Adding a cross-encoder reranker as a second stage after FAISS retrieval improved results on 2 out of 8 test queries without hurting any others. Tested on the Solar System Wikipedia PDF. The reranker never made results worse — when FAISS was correct, the reranker agreed. When FAISS returned irrelevant chunks (moons of Mars, Neptune velocity), the reranker correctly promoted the relevant ones.
 
 ### k=50 Required for Comparative Table Queries
 With k=20, the full orbital periods table chunk was not appearing in the reranker's candidate pool for queries like "which planet has the longest orbital period". Increasing to k=50 brought the table chunk to rank 2, giving the LLM enough context to reason across all planets and answer correctly. The cost is negligible — FAISS search over 50 candidates is still milliseconds.
