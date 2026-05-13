@@ -91,7 +91,7 @@ doctalk/
 
 ## Things I learned along the way
 
-The full writeup is in [LEARNINGS.md](LEARNINGS.md) but the short version:
+The full writeup is in [Learnings.md](Learnings.md) but the short version:
 
 Chunk size matters more than I expected. Switching from 500 to 200 characters per 
 chunk was the single biggest improvement to retrieval quality. A dense chunk with 
