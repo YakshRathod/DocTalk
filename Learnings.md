@@ -169,3 +169,17 @@ All sidebar elements must be properly indented inside the `with st.sidebar:` blo
 single indentation error caused the file uploader to render in the main content area 
 instead of the sidebar, breaking the entire layout. Python's strict indentation rules 
 apply to Streamlit layout blocks just as they do to any other code.
+
+## Week 5 — Folder Indexing and Reranker
+
+### Folder Indexing Uses Merge Not Rebuild
+When adding a new document to a folder, merging the new document's index into the existing folder index using FAISS merge_from is faster than rebuilding the entire folder from scratch. The tradeoff is that removing a document from a folder requires a full rebuild since FAISS doesn't support vector deletion. This is acceptable because additions are frequent and deletions are rare.
+
+### Cross-Encoder Reranker Fixes Retrieval Failures
+Adding a cross-encoder reranker as a second stage after FAISS retrieval improved results on 2 out of 8 test queries without hurting any others. The reranker never made results worse — when FAISS was correct, the reranker agreed. When FAISS returned irrelevant chunks (moons of Mars, Neptune velocity), the reranker correctly promoted the relevant ones.
+
+### k=50 Required for Comparative Table Queries
+With k=20, the full orbital periods table chunk was not appearing in the reranker's candidate pool for queries like "which planet has the longest orbital period". Increasing to k=50 brought the table chunk to rank 2, giving the LLM enough context to reason across all planets and answer correctly. The cost is negligible — FAISS search over 50 candidates is still milliseconds.
+
+### RAG Has a Hard Limit on Comparative Reasoning
+Even with the reranker and k=50, comparative reasoning only works when the full data fits in a single retrievable chunk. If the answer requires synthesising information across many separate chunks, RAG will still struggle. The right solution for these cases is map-reduce — ask the LLM to answer from each section independently then combine — but that's expensive and out of scope for this project.
