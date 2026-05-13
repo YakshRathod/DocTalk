@@ -95,21 +95,7 @@ doctalk/
 
 ## Things I learned along the way
 
-The full writeup is in [Learnings.md](Learnings.md) but the short version:
-
-Chunk size matters more than I expected. Switching from 500 to 200 characters per 
-chunk was the single biggest improvement to retrieval quality. A dense chunk with 
-5 facts scores mediocrely for all 5 queries — a focused chunk with 1 fact scores 
-precisely for that query.
-
-Compression sounded smart but introduced hallucination. The simpler pipeline 
-outperformed the complex one. Fix the data first, add complexity later.
-
-FAISS has a built-in merge_from method that makes combining multiple indexes 
-trivial — one line to merge any number of indexes for cross-document querying.
-
-Table rows must never be split mid-chunk. Keeping tables as single intact chunks 
-was the difference between the LLM finding the answer and returning nothing.
+The full writeup is in [Learnings.md](Learnings.md).
 
 ---
 
