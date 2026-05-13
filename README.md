@@ -89,7 +89,7 @@ doctalk/
 - [x] Week 3 — Multi file type support, per-document indexing, multi-doc querying, edge cases
 - [x] Week 4 — Table extraction, Streamlit UI with single and multi-doc querying
 - [x] Week 5 — Folder indexing, cross-encoder reranker
-- [ ] Week 6 — Pipeline rewrite without LangChain, embedding experiments
+- [ ] Week 6 — Pipeline rewrite without LangChain, embedding experiments (planned)
 
 ---
 
