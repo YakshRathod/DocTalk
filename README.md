@@ -68,6 +68,10 @@ doctalk/
 │   └── Week4_Table_Extraction.ipynb
 ├── app/
 │   └── app.py
+├── docs/
+│   ├── Solar System - Wikipedia.pdf
+│   ├── mars_lithograph.pdf
+│   └── earth_lithograph.pdf
 ├── Results/
 │   ├── week1_output.pdf
 │   ├── week2_output.pdf
